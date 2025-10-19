@@ -32,31 +32,36 @@ export const handleTelegramWebhook = async (req, res) => {
     if (text.toLowerCase() === '/start') {
       const responseText = `¡Hola ${userFirstName}! 👋\n\n` +
         `Soy tu asistente de estudio de Leroi.\n\n` +
-        `**Comandos disponibles:**\n` +
-        `• Pregúntame sobre cualquier tema\n` +
-        `• /vincular - Vincula tu cuenta de Leroi\n` +
-        `• /roadmap - Ver tu roadmap actual\n` +
-        `• /cambiar [tema] - Cambiar de roadmap\n` +
-        `• /progreso - Ver tu progreso\n` +
-        `• /help - Ver ayuda completa\n\n` +
-        `💡 Primero vincula tu cuenta con /vincular`;
+        `**Comandos:**\n` +
+        `• /vincular - Vincula tu cuenta\n` +
+        `• /listar - Ver tus roadmaps\n` +
+        `• /roadmap - Ver roadmap activo\n` +
+        `• /cambiar [tema] - Cambiar roadmap\n` +
+        `• /help - Ayuda completa\n\n` +
+        `💡 Empieza con /vincular`;
 
       await telegramService.sendMessage(chatId, responseText);
     } 
     
     else if (text.toLowerCase() === '/help') {
-      const responseText = `📚 **Comandos de Leroi Bot**\n\n` +
-        `🔗 **Vinculación:**\n` +
-        `/vincular - Obtén tu código para vincular\n\n` +
-        `📊 **Roadmaps:**\n` +
-        `/roadmap - Ver roadmap actual\n` +
-        `/cambiar [tema] - Cambiar tema (ej: /cambiar React)\n` +
-        `/progreso - Ver tu progreso\n\n` +
-        `💬 **Chatear:**\n` +
-        `Simplemente escribe tu pregunta y te ayudaré basándome en tu roadmap actual.\n\n` +
-        `🎯 **Ejemplo:**\n` +
-        `"¿Qué es un componente en React?"\n` +
-        `"Explícame los hooks"`;
+      const responseText = `📚 **Guía de Uso - Leroi Bot**\n\n` +
+        `🔗 **1. Vinculación:**\n` +
+        `/vincular - Obtén tu código\n` +
+        `Luego ingésalo en leroi.app/perfil\n\n` +
+        `📊 **2. Roadmaps:**\n` +
+        `/listar - Ver todos tus roadmaps\n` +
+        `/cambiar [tema] - Activar roadmap\n` +
+        `   Ejemplo: \`/cambiar perro pomerania\`\n` +
+        `/roadmap - Ver detalles del activo\n\n` +
+        `💬 **3. Preguntar:**\n` +
+        `Escribe tu pregunta directamente\n` +
+        `El bot SOLO responde sobre tu roadmap activo\n\n` +
+        `🎯 **Flujo de uso:**\n` +
+        `1. /vincular (víncula cuenta)\n` +
+        `2. /listar (ve tus roadmaps)\n` +
+        `3. /cambiar React (activa React)\n` +
+        `4. Pregunta: ¿Qué son los hooks?\n\n` +
+        `ℹ️ El bot está especializado en TU roadmap.`;
 
       await telegramService.sendMessage(chatId, responseText);
     }

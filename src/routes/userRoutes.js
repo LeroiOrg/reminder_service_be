@@ -1,7 +1,115 @@
 import express from 'express';
 import { UserSettings } from '../models/index.js';
+import mongoService from '../services/mongoService.js';
 
 const router = express.Router();
+
+/**
+ * PUT /api/users/active-roadmap/:email
+ * Activar un roadmap específico para el usuario
+ */
+router.put('/active-roadmap/:email', async (req, res) => {
+  try {
+    const { email } = req.params;
+    const { roadmapTopic } = req.body;
+
+    if (!roadmapTopic) {
+      return res.status(400).json({
+        success: false,
+        message: 'roadmapTopic es requerido'
+      });
+    }
+
+    console.log(`🎯 Activando roadmap "${roadmapTopic}" para ${email}`);
+
+    // Verificar que el roadmap existe
+    const roadmapExists = await mongoService.getRoadmapByTopic(email, roadmapTopic);
+
+    if (!roadmapExists) {
+      return res.status(404).json({
+        success: false,
+        message: `No se encontró roadmap con tema: ${roadmapTopic}`
+      });
+    }
+
+    // Buscar o crear UserSettings
+    let userSettings = await UserSettings.findOne({
+      where: { userEmail: email }
+    });
+
+    if (!userSettings) {
+      // Crear nuevo si no existe
+      userSettings = await UserSettings.create({
+        userId: 0,
+        userEmail: email,
+        activeRoadmapTopic: roadmapTopic
+      });
+    } else {
+      // Actualizar existente
+      userSettings.activeRoadmapTopic = roadmapTopic;
+      await userSettings.save();
+    }
+
+    res.json({
+      success: true,
+      message: 'Roadmap activado exitosamente',
+      data: {
+        email: userSettings.userEmail,
+        activeRoadmapTopic: userSettings.activeRoadmapTopic
+      }
+    });
+  } catch (error) {
+    console.error('❌ Error activando roadmap:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error activando roadmap',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/users/roadmaps/:email
+ * Obtener todos los roadmaps de un usuario desde MongoDB
+ */
+router.get('/roadmaps/:email', async (req, res) => {
+  try {
+    const { email } = req.params;
+
+    console.log(`📚 Obteniendo roadmaps de: ${email}`);
+
+    const roadmaps = await mongoService.getUserRoadmaps(email, 50);
+
+    if (roadmaps.length === 0) {
+      return res.json({
+        success: true,
+        message: 'Usuario no tiene roadmaps',
+        data: []
+      });
+    }
+
+    // Formatear respuesta
+    const formattedRoadmaps = roadmaps.map(r => ({
+      topic: r.topic,
+      subtopicsCount: Object.keys(r.roadmap || {}).length,
+      timestamp: r.timestamp,
+      createdAt: new Date(r.timestamp).toISOString()
+    }));
+
+    res.json({
+      success: true,
+      count: formattedRoadmaps.length,
+      data: formattedRoadmaps
+    });
+  } catch (error) {
+    console.error('❌ Error obteniendo roadmaps:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error obteniendo roadmaps',
+      error: error.message
+    });
+  }
+});
 
 /**
  * POST /api/users/link-whatsapp

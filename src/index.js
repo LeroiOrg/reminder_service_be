@@ -7,6 +7,7 @@ import webhookRoutes from './routes/webhookRoutes.js';
 import whatsappWebhookRoutes from './routes/whatsappWebhookRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import reminderScheduler from './services/reminderScheduler.js';
+import { notFound, errorHandler } from './middleware/errorHandler.js';
 
 dotenv.config();
 
@@ -47,6 +48,12 @@ app.use('/webhooks', whatsappWebhookRoutes);
 
 // Rutas de gestión de usuarios
 app.use('/api/users', userRoutes);
+
+// Middleware de 404
+app.use(notFound);
+
+// Middleware de manejo de errores
+app.use(errorHandler);
 
 // Iniciar servidor
 const startServer = async () => {
