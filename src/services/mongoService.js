@@ -3,8 +3,9 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://leroidevteam:pNRoSlb1lIav55Z9@leroi.j1keefw.mongodb.net/?retryWrites=true&w=majority&appName=Leroi';
-const DB_NAME = 'leroi_learning';
+// Conexión para consultar roadmaps del Learning Path Service
+const MONGO_LEARNING_URI = process.env.MONGO_LEARNING_URI || process.env.MONGO_URI;
+const MONGO_LEARNING_DB = process.env.MONGO_LEARNING_DB || 'leroi_learning';
 
 class MongoService {
   constructor() {
@@ -18,14 +19,14 @@ class MongoService {
         return this.db;
       }
 
-      console.log('🔌 Conectando a MongoDB...');
-      this.client = new MongoClient(MONGO_URI);
+      console.log('🔌 Conectando a MongoDB (Learning Path)...');
+      this.client = new MongoClient(MONGO_LEARNING_URI);
       await this.client.connect();
-      this.db = this.client.db(DB_NAME);
-      console.log('✅ Conectado a MongoDB');
+      this.db = this.client.db(MONGO_LEARNING_DB);
+      console.log(`✅ Conectado a MongoDB - Base de datos: ${MONGO_LEARNING_DB}`);
       return this.db;
     } catch (error) {
-      console.error('❌ Error conectando a MongoDB:', error.message);
+      console.error('❌ Error conectando a MongoDB (Learning Path):', error.message);
       throw error;
     }
   }
@@ -33,7 +34,7 @@ class MongoService {
   async disconnect() {
     if (this.client) {
       await this.client.close();
-      console.log('🔌 Desconectado de MongoDB');
+      console.log('🔌 Desconectado de MongoDB (Learning Path)');
     }
   }
 

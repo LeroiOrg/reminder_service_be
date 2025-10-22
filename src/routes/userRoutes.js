@@ -1,111 +1,54 @@
 import express from 'express';
-import { UserSettings } from '../models/index.js';
+import { userNotificationSettingsService } from '../mongodb/index.js';
 import mongoService from '../services/mongoService.js';
 
 const router = express.Router();
 
 /**
- * PUT /api/users/active-roadmap/:email
- * Activar un roadmap específico para el usuario
+ * POST /api/users/link-telegram
+ * Vincular cuenta de usuario con chat_id de Telegram
  */
-router.put('/active-roadmap/:email', async (req, res) => {
+router.post('/link-telegram', async (req, res) => {
   try {
-    const { email } = req.params;
-    const { roadmapTopic } = req.body;
+    const { email, telegramChatId, activeRoadmapTopic } = req.body;
 
-    if (!roadmapTopic) {
+    if (!email || !telegramChatId) {
       return res.status(400).json({
         success: false,
-        message: 'roadmapTopic es requerido'
+        message: 'Email y telegramChatId son requeridos'
       });
     }
 
-    console.log(`🎯 Activando roadmap "${roadmapTopic}" para ${email}`);
+    console.log(`🔗 Vinculando: ${email} → Telegram: ${telegramChatId}`);
 
-    // Verificar que el roadmap existe
-    const roadmapExists = await mongoService.getRoadmapByTopic(email, roadmapTopic);
+    // Vincular Telegram en MongoDB
+    await userNotificationSettingsService.linkTelegram(email, telegramChatId);
 
-    if (!roadmapExists) {
-      return res.status(404).json({
-        success: false,
-        message: `No se encontró roadmap con tema: ${roadmapTopic}`
+    // Si hay un roadmap activo, actualizarlo
+    if (activeRoadmapTopic) {
+      await userNotificationSettingsService.updateReminderSettings(email, {
+        activeRoadmapTopic
       });
     }
 
-    // Buscar o crear UserSettings
-    let userSettings = await UserSettings.findOne({
-      where: { userEmail: email }
-    });
-
-    if (!userSettings) {
-      // Crear nuevo si no existe
-      userSettings = await UserSettings.create({
-        userId: 0,
-        userEmail: email,
-        activeRoadmapTopic: roadmapTopic
-      });
-    } else {
-      // Actualizar existente
-      userSettings.activeRoadmapTopic = roadmapTopic;
-      await userSettings.save();
-    }
+    // Obtener la configuración actualizada
+    const userSettings = await userNotificationSettingsService.getUserSettings(email);
 
     res.json({
       success: true,
-      message: 'Roadmap activado exitosamente',
+      message: 'Telegram vinculado exitosamente',
       data: {
         email: userSettings.userEmail,
-        activeRoadmapTopic: userSettings.activeRoadmapTopic
+        telegramChatId: userSettings.telegram.chatId,
+        telegramEnabled: userSettings.telegram.enabled,
+        activeRoadmapTopic: userSettings.reminderSettings?.activeRoadmapTopic
       }
     });
   } catch (error) {
-    console.error('❌ Error activando roadmap:', error);
+    console.error('❌ Error vinculando Telegram:', error);
     res.status(500).json({
       success: false,
-      message: 'Error activando roadmap',
-      error: error.message
-    });
-  }
-});
-
-/**
- * GET /api/users/roadmaps/:email
- * Obtener todos los roadmaps de un usuario desde MongoDB
- */
-router.get('/roadmaps/:email', async (req, res) => {
-  try {
-    const { email } = req.params;
-
-    console.log(`📚 Obteniendo roadmaps de: ${email}`);
-
-    const roadmaps = await mongoService.getUserRoadmaps(email, 50);
-
-    if (roadmaps.length === 0) {
-      return res.json({
-        success: true,
-        message: 'Usuario no tiene roadmaps',
-        data: []
-      });
-    }
-
-    // Formatear respuesta
-    const formattedRoadmaps = roadmaps.map(r => ({
-      topic: r.topic,
-      subtopicsCount: Object.keys(r.roadmap || {}).length,
-      timestamp: r.timestamp,
-      createdAt: new Date(r.timestamp).toISOString()
-    }));
-
-    res.json({
-      success: true,
-      count: formattedRoadmaps.length,
-      data: formattedRoadmaps
-    });
-  } catch (error) {
-    console.error('❌ Error obteniendo roadmaps:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error obteniendo roadmaps',
+      message: 'Error vinculando cuenta',
       error: error.message
     });
   }
@@ -128,109 +71,31 @@ router.post('/link-whatsapp', async (req, res) => {
 
     console.log(`🔗 Vinculando: ${email} → WhatsApp: ${whatsappNumber}`);
 
-    // Buscar o crear UserSettings
-    let userSettings = await UserSettings.findOne({
-      where: { userEmail: email }
-    });
+    // Vincular WhatsApp en MongoDB
+    await userNotificationSettingsService.linkWhatsApp(email, whatsappNumber);
 
-    if (userSettings) {
-      // Actualizar existente
-      userSettings.whatsappNumber = whatsappNumber;
-      userSettings.whatsappEnabled = true;
-      if (activeRoadmapTopic) {
-        userSettings.activeRoadmapTopic = activeRoadmapTopic;
-      }
-      await userSettings.save();
-      
-      console.log('✅ UserSettings actualizado');
-    } else {
-      // Crear nuevo
-      userSettings = await UserSettings.create({
-        userId: 0,
-        userEmail: email,
-        whatsappNumber: whatsappNumber,
-        whatsappEnabled: true,
-        activeRoadmapTopic: activeRoadmapTopic || null
+    // Si hay un roadmap activo, actualizarlo
+    if (activeRoadmapTopic) {
+      await userNotificationSettingsService.updateReminderSettings(email, {
+        activeRoadmapTopic
       });
-      
-      console.log('✅ UserSettings creado');
     }
+
+    // Obtener la configuración actualizada
+    const userSettings = await userNotificationSettingsService.getUserSettings(email);
 
     res.json({
       success: true,
       message: 'WhatsApp vinculado exitosamente',
       data: {
         email: userSettings.userEmail,
-        whatsappNumber: userSettings.whatsappNumber,
-        activeRoadmapTopic: userSettings.activeRoadmapTopic
+        whatsappNumber: userSettings.whatsapp.number,
+        whatsappEnabled: userSettings.whatsapp.enabled,
+        activeRoadmapTopic: userSettings.reminderSettings?.activeRoadmapTopic
       }
     });
   } catch (error) {
     console.error('❌ Error vinculando WhatsApp:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error vinculando cuenta',
-      error: error.message
-    });
-  }
-});
-
-/**
- * POST /api/users/link-telegram
- * Vincular cuenta de usuario con chat_id de Telegram
- */
-router.post('/link-telegram', async (req, res) => {
-  try {
-    const { email, telegramChatId, activeRoadmapTopic } = req.body;
-
-    if (!email || !telegramChatId) {
-      return res.status(400).json({
-        success: false,
-        message: 'Email y telegramChatId son requeridos'
-      });
-    }
-
-    console.log(`🔗 Vinculando: ${email} → Telegram: ${telegramChatId}`);
-
-    // Buscar o crear UserSettings
-    let userSettings = await UserSettings.findOne({
-      where: { userEmail: email }
-    });
-
-    if (userSettings) {
-      // Actualizar existente
-      userSettings.telegramChatId = telegramChatId.toString();
-      userSettings.telegramEnabled = true;
-      if (activeRoadmapTopic) {
-        userSettings.activeRoadmapTopic = activeRoadmapTopic;
-      }
-      await userSettings.save();
-      
-      console.log('✅ UserSettings actualizado');
-    } else {
-      // Crear nuevo
-      userSettings = await UserSettings.create({
-        userId: 0, // Placeholder, no usamos el userId de Auth directamente
-        userEmail: email,
-        telegramChatId: telegramChatId.toString(),
-        telegramEnabled: true,
-        activeRoadmapTopic: activeRoadmapTopic || null
-      });
-      
-      console.log('✅ UserSettings creado');
-    }
-
-    res.json({
-      success: true,
-      message: 'Telegram vinculado exitosamente',
-      data: {
-        email: userSettings.userEmail,
-        telegramChatId: userSettings.telegramChatId,
-        activeRoadmapTopic: userSettings.activeRoadmapTopic
-      }
-    });
-  } catch (error) {
-    console.error('❌ Error vinculando Telegram:', error);
     res.status(500).json({
       success: false,
       message: 'Error vinculando cuenta',
@@ -247,9 +112,7 @@ router.get('/settings/:email', async (req, res) => {
   try {
     const { email } = req.params;
 
-    const userSettings = await UserSettings.findOne({
-      where: { userEmail: email }
-    });
+    const userSettings = await userNotificationSettingsService.getUserSettings(email);
 
     if (!userSettings) {
       return res.status(404).json({
@@ -262,13 +125,20 @@ router.get('/settings/:email', async (req, res) => {
       success: true,
       data: {
         email: userSettings.userEmail,
-        telegramChatId: userSettings.telegramChatId,
-        telegramEnabled: userSettings.telegramEnabled,
-        whatsappNumber: userSettings.whatsappNumber,
-        whatsappEnabled: userSettings.whatsappEnabled,
-        activeRoadmapTopic: userSettings.activeRoadmapTopic,
-        reminderFrequency: userSettings.reminderFrequency,
-        reminderTime: userSettings.reminderTime
+        telegram: {
+          chatId: userSettings.telegram?.chatId || null,
+          enabled: userSettings.telegram?.enabled || false
+        },
+        whatsapp: {
+          number: userSettings.whatsapp?.number || null,
+          enabled: userSettings.whatsapp?.enabled || false
+        },
+        preferredChannel: userSettings.preferredChannel || 'none',
+        reminderSettings: {
+          frequency: userSettings.reminderSettings?.frequency || 'daily',
+          time: userSettings.reminderSettings?.time || '09:00',
+          activeRoadmapTopic: userSettings.reminderSettings?.activeRoadmapTopic || null
+        }
       }
     });
   } catch (error) {
@@ -290,9 +160,7 @@ router.put('/settings/:email', async (req, res) => {
     const { email } = req.params;
     const updates = req.body;
 
-    const userSettings = await UserSettings.findOne({
-      where: { userEmail: email }
-    });
+    const userSettings = await userNotificationSettingsService.getUserSettings(email);
 
     if (!userSettings) {
       return res.status(404).json({
@@ -301,30 +169,48 @@ router.put('/settings/:email', async (req, res) => {
       });
     }
 
-    // Actualizar campos permitidos
-    const allowedFields = [
-      'activeRoadmapTopic',
-      'reminderFrequency',
-      'reminderTime',
-      'telegramEnabled',
-      'whatsappEnabled'
-    ];
+    // Actualizar canal preferido si está en el request
+    if (updates.preferredChannel) {
+      await userNotificationSettingsService.updatePreferredChannel(email, updates.preferredChannel);
+    }
 
-    allowedFields.forEach(field => {
-      if (updates[field] !== undefined) {
-        userSettings[field] = updates[field];
-      }
-    });
+    // Actualizar estados de habilitación de canales
+    const settingsUpdate = {};
+    
+    if (updates.telegramEnabled !== undefined) {
+      settingsUpdate['telegram.enabled'] = updates.telegramEnabled;
+    }
+    
+    if (updates.whatsappEnabled !== undefined) {
+      settingsUpdate['whatsapp.enabled'] = updates.whatsappEnabled;
+    }
 
-    await userSettings.save();
+    if (Object.keys(settingsUpdate).length > 0) {
+      await userNotificationSettingsService.upsertUserSettings(email, settingsUpdate);
+    }
+
+    // Actualizar recordatorios si están en el request
+    const reminderUpdates = {};
+    if (updates.reminderFrequency) reminderUpdates.frequency = updates.reminderFrequency;
+    if (updates.reminderTime) reminderUpdates.time = updates.reminderTime;
+    if (updates.activeRoadmapTopic !== undefined) reminderUpdates.activeRoadmapTopic = updates.activeRoadmapTopic;
+
+    if (Object.keys(reminderUpdates).length > 0) {
+      await userNotificationSettingsService.updateReminderSettings(email, reminderUpdates);
+    }
+
+    // Obtener configuración actualizada
+    const updatedSettings = await userNotificationSettingsService.getUserSettings(email);
 
     res.json({
       success: true,
       message: 'Configuración actualizada',
       data: {
-        email: userSettings.userEmail,
-        activeRoadmapTopic: userSettings.activeRoadmapTopic,
-        reminderFrequency: userSettings.reminderFrequency
+        email: updatedSettings.userEmail,
+        preferredChannel: updatedSettings.preferredChannel,
+        telegram: updatedSettings.telegram,
+        whatsapp: updatedSettings.whatsapp,
+        reminderSettings: updatedSettings.reminderSettings
       }
     });
   } catch (error) {
@@ -345,9 +231,7 @@ router.delete('/unlink-telegram/:email', async (req, res) => {
   try {
     const { email } = req.params;
 
-    const userSettings = await UserSettings.findOne({
-      where: { userEmail: email }
-    });
+    const userSettings = await userNotificationSettingsService.getUserSettings(email);
 
     if (!userSettings) {
       return res.status(404).json({
@@ -356,9 +240,7 @@ router.delete('/unlink-telegram/:email', async (req, res) => {
       });
     }
 
-    userSettings.telegramChatId = null;
-    userSettings.telegramEnabled = false;
-    await userSettings.save();
+    await userNotificationSettingsService.unlinkTelegram(email);
 
     res.json({
       success: true,
@@ -366,6 +248,39 @@ router.delete('/unlink-telegram/:email', async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Error desvinculando Telegram:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error desvinculando cuenta',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * DELETE /api/users/unlink-whatsapp/:email
+ * Desvincular WhatsApp de una cuenta
+ */
+router.delete('/unlink-whatsapp/:email', async (req, res) => {
+  try {
+    const { email } = req.params;
+
+    const userSettings = await userNotificationSettingsService.getUserSettings(email);
+
+    if (!userSettings) {
+      return res.status(404).json({
+        success: false,
+        message: 'Usuario no encontrado'
+      });
+    }
+
+    await userNotificationSettingsService.unlinkWhatsApp(email);
+
+    res.json({
+      success: true,
+      message: 'WhatsApp desvinculado exitosamente'
+    });
+  } catch (error) {
+    console.error('❌ Error desvinculando WhatsApp:', error);
     res.status(500).json({
       success: false,
       message: 'Error desvinculando cuenta',
@@ -383,16 +298,14 @@ router.put('/preferred-channel/:email', async (req, res) => {
     const { email } = req.params;
     const { preferredChannel } = req.body;
 
-    if (!['telegram', 'whatsapp', 'both'].includes(preferredChannel)) {
+    if (!['telegram', 'whatsapp', 'both', 'none'].includes(preferredChannel)) {
       return res.status(400).json({
         success: false,
-        message: 'Canal inválido. Opciones: telegram, whatsapp, both'
+        message: 'Canal inválido. Opciones: telegram, whatsapp, both, none'
       });
     }
 
-    const userSettings = await UserSettings.findOne({
-      where: { userEmail: email }
-    });
+    const userSettings = await userNotificationSettingsService.getUserSettings(email);
 
     if (!userSettings) {
       return res.status(404).json({
@@ -401,15 +314,14 @@ router.put('/preferred-channel/:email', async (req, res) => {
       });
     }
 
-    userSettings.preferredChannel = preferredChannel;
-    await userSettings.save();
+    await userNotificationSettingsService.updatePreferredChannel(email, preferredChannel);
 
     res.json({
       success: true,
       message: 'Canal favorito actualizado',
       data: {
-        email: userSettings.userEmail,
-        preferredChannel: userSettings.preferredChannel
+        email,
+        preferredChannel
       }
     });
   } catch (error) {
@@ -448,9 +360,7 @@ router.put('/reminder-settings/:email', async (req, res) => {
       });
     }
 
-    const userSettings = await UserSettings.findOne({
-      where: { userEmail: email }
-    });
+    const userSettings = await userNotificationSettingsService.getUserSettings(email);
 
     if (!userSettings) {
       return res.status(404).json({
@@ -459,18 +369,21 @@ router.put('/reminder-settings/:email', async (req, res) => {
       });
     }
 
-    if (reminderFrequency) userSettings.reminderFrequency = reminderFrequency;
-    if (reminderTime) userSettings.reminderTime = reminderTime;
-    
-    await userSettings.save();
+    const updates = {};
+    if (reminderFrequency) updates.frequency = reminderFrequency;
+    if (reminderTime) updates.time = reminderTime;
+
+    await userNotificationSettingsService.updateReminderSettings(email, updates);
+
+    const updatedSettings = await userNotificationSettingsService.getUserSettings(email);
 
     res.json({
       success: true,
       message: 'Configuración de recordatorios actualizada',
       data: {
-        email: userSettings.userEmail,
-        reminderFrequency: userSettings.reminderFrequency,
-        reminderTime: userSettings.reminderTime
+        email: updatedSettings.userEmail,
+        reminderFrequency: updatedSettings.reminderSettings.frequency,
+        reminderTime: updatedSettings.reminderSettings.time
       }
     });
   } catch (error) {
@@ -478,6 +391,102 @@ router.put('/reminder-settings/:email', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error actualizando configuración',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * PUT /api/users/active-roadmap/:email
+ * Activar un roadmap específico para el usuario
+ */
+router.put('/active-roadmap/:email', async (req, res) => {
+  try {
+    const { email } = req.params;
+    const { roadmapTopic } = req.body;
+
+    if (!roadmapTopic) {
+      return res.status(400).json({
+        success: false,
+        message: 'roadmapTopic es requerido'
+      });
+    }
+
+    console.log(`🎯 Activando roadmap "${roadmapTopic}" para ${email}`);
+
+    // Verificar que el roadmap existe en learning_path
+    const roadmapExists = await mongoService.getRoadmapByTopic(email, roadmapTopic);
+
+    if (!roadmapExists) {
+      return res.status(404).json({
+        success: false,
+        message: `No se encontró roadmap con tema: ${roadmapTopic}`
+      });
+    }
+
+    // Actualizar el roadmap activo en MongoDB
+    await userNotificationSettingsService.updateReminderSettings(email, {
+      activeRoadmapTopic: roadmapTopic
+    });
+
+    const userSettings = await userNotificationSettingsService.getUserSettings(email);
+
+    res.json({
+      success: true,
+      message: 'Roadmap activado exitosamente',
+      data: {
+        email: userSettings.userEmail,
+        activeRoadmapTopic: userSettings.reminderSettings?.activeRoadmapTopic
+      }
+    });
+  } catch (error) {
+    console.error('❌ Error activando roadmap:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error activando roadmap',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/users/roadmaps/:email
+ * Obtener todos los roadmaps de un usuario desde MongoDB (Learning Path)
+ */
+router.get('/roadmaps/:email', async (req, res) => {
+  try {
+    const { email } = req.params;
+
+    console.log(`📚 Obteniendo roadmaps de: ${email}`);
+
+    const roadmaps = await mongoService.getUserRoadmaps(email, 50);
+
+    if (roadmaps.length === 0) {
+      return res.json({
+        success: true,
+        message: 'Usuario no tiene roadmaps',
+        data: []
+      });
+    }
+
+    // Formatear respuesta
+    const formattedRoadmaps = roadmaps.map(r => ({
+      topic: r.topic,
+      subtopicsCount: Object.keys(r.roadmap || {}).length,
+      timestamp: r.timestamp,
+      createdAt: new Date(r.timestamp).toISOString()
+    }));
+
+    res.json({
+      success: true,
+      count: formattedRoadmaps.length,
+      data: formattedRoadmaps
+    });
+  } catch (error) {
+    console.error('❌ Error obteniendo roadmaps:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error obteniendo roadmaps',
       error: error.message
     });
   }

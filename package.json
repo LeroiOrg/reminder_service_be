@@ -8,8 +8,10 @@
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
     "migrate": "node src/migrations/001_add_learning_path_integration.js",
+    "init:notification-collection": "node src/scripts/init-notification-collection.js",
     "test:mongo": "node src/tests/test-mongo.js",
     "test:flow": "node src/tests/test-bot-flow.js",
+    "test:notification-settings": "node src/tests/test-notification-settings.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [

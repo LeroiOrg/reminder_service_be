@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { testConnection, syncDatabase } from './config/database.js';
+import { initializeMongoDB } from './mongodb/index.js';
 import testRoutes from './routes/testRoutes.js';
 import webhookRoutes from './routes/webhookRoutes.js';
 import whatsappWebhookRoutes from './routes/whatsappWebhookRoutes.js';
@@ -19,6 +20,12 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Log de todas las peticiones (para debug)
+app.use((req, res, next) => {
+  console.log(`📥 ${req.method} ${req.path}`);
+  next();
+});
+
 // Ruta de health check
 app.get('/', (req, res) => {
   res.json({
@@ -26,11 +33,13 @@ app.get('/', (req, res) => {
     status: 'healthy',
     version: '3.0.0',
     tech: 'Node.js + Express',
+    databases: ['PostgreSQL', 'MongoDB (Reminders)', 'MongoDB (Learning Path)'],
     features: [
       'Telegram Bot with Roadmap Integration',
       'WhatsApp Notifications',
       'AI-Powered Chatbot (Groq/Llama)',
-      'Learning Path Integration'
+      'Learning Path Integration',
+      'User Notification Settings'
     ]
   });
 });
@@ -60,13 +69,17 @@ const startServer = async () => {
   try {
     console.log('🔧 Iniciando Reminder Service...');
     
-    // Verificar conexión a BD
+    // Verificar conexión a PostgreSQL
     console.log('📊 Conectando a PostgreSQL...');
     await testConnection();
     
-    // Sincronizar modelos
-    console.log('🔄 Sincronizando modelos...');
+    // Sincronizar modelos de PostgreSQL
+    console.log('🔄 Sincronizando modelos PostgreSQL...');
     await syncDatabase();
+    
+    // Inicializar MongoDB
+    console.log('📊 Inicializando MongoDB...');
+    await initializeMongoDB();
     
     // Iniciar servidor
     app.listen(PORT, () => {
@@ -79,7 +92,10 @@ const startServer = async () => {
       console.log('\n📚 Servicios integrados:');
       console.log(`   - Auth Service: ${process.env.USERS_SERVICE_URL}`);
       console.log(`   - Learning Path: ${process.env.LEARNING_SERVICE_URL}`);
-      console.log(`   - MongoDB: Conectado`);
+      console.log('\n💾 Bases de datos:');
+      console.log(`   - PostgreSQL: Conectado (Legacy)`);
+      console.log(`   - MongoDB Reminders: Conectado`);
+      console.log(`   - MongoDB Learning Path: Conectado`);
       
       // Iniciar sistema de recordatorios
       console.log('\n⏰ Iniciando sistema de recordatorios...');
