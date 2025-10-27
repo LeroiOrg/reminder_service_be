@@ -10,10 +10,10 @@ RUN npm ci --only=production
 COPY . .
 
 # Exponer puerto
-EXPOSE 8006
+EXPOSE 8080
 
 # Variables de entorno por defecto
 ENV NODE_ENV=production
-ENV PORT=8006
+ENV PORT=8080
 
 CMD ["npm", "start"]

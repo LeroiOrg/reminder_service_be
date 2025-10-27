@@ -1,6 +1,6 @@
 import telegramService from '../services/telegramService.js';
 import groqService from '../services/groqService.js';
-import mongoService from '../services/mongoService.js';
+import learningPathClient from '../services/learningPathClient.js';
 import { userNotificationSettingsService } from '../mongodb/index.js';
 
 /**
@@ -43,7 +43,6 @@ export const handleTelegramWebhook = async (req, res) => {
     } 
     
     else if (text.toLowerCase() === '/vincular') {
-      // Mostrar el chat_id para que el usuario lo vincule en la web
       const responseText = `🔗 **Vincular cuenta**\n\n` +
         `Tu Chat ID de Telegram es:\n\n` +
         `\`${chatId}\`\n\n` +
@@ -68,18 +67,12 @@ export const handleTelegramWebhook = async (req, res) => {
         `/roadmap - Ver detalles del activo\n\n` +
         `💬 **3. Preguntar:**\n` +
         `Escribe tu pregunta directamente\n` +
-        `El bot responde sobre tu roadmap activo\n\n` +
-        `🎯 **Flujo de uso:**\n` +
-        `1. /vincular (víncula cuenta)\n` +
-        `2. /listar (ve tus roadmaps)\n` +
-        `3. /cambiar React (activa React)\n` +
-        `4. Pregunta: ¿Qué son los hooks?`;
+        `El bot responde sobre tu roadmap activo`;
 
       await telegramService.sendMessage(chatId, responseText);
     }
     
     else if (text.toLowerCase() === '/roadmap') {
-      // Buscar el usuario vinculado en MongoDB
       const userSettings = await userNotificationSettingsService.findByChatId(chatId.toString());
 
       if (!userSettings || !userSettings.userEmail) {
@@ -91,10 +84,9 @@ export const handleTelegramWebhook = async (req, res) => {
         return res.json({ ok: true });
       }
 
-      // Obtener roadmaps del usuario desde MongoDB
       await telegramService.sendMessage(chatId, '📚 Buscando tus roadmaps...');
       
-      const allRoadmaps = await mongoService.getUserRoadmaps(userSettings.userEmail, 20);
+      const allRoadmaps = await learningPathClient.getUserRoadmaps(userSettings.userEmail, 20);
 
       if (allRoadmaps.length === 0) {
         const responseText = `📚 **Sin roadmaps**\n\n` +
@@ -105,11 +97,10 @@ export const handleTelegramWebhook = async (req, res) => {
         return res.json({ ok: true });
       }
 
-      // Si tiene roadmap activo, mostrar ese
       const activeRoadmapTopic = userSettings.reminderSettings?.activeRoadmapTopic;
       
       if (activeRoadmapTopic) {
-        const roadmapResult = await mongoService.getRoadmapByTopic(
+        const roadmapResult = await learningPathClient.getRoadmapByTopic(
           userSettings.userEmail,
           activeRoadmapTopic
         );
@@ -122,7 +113,6 @@ export const handleTelegramWebhook = async (req, res) => {
           return res.json({ ok: true });
         }
 
-        // Formatear el roadmap
         let roadmapText = `📊 **Tu Roadmap: ${activeRoadmapTopic}**\n\n`;
         
         const roadmap = roadmapResult.roadmap;
@@ -140,7 +130,6 @@ export const handleTelegramWebhook = async (req, res) => {
 
         await telegramService.sendMessage(chatId, roadmapText);
       } else {
-        // No tiene roadmap activo, mostrar lista
         let listText = `📚 **Tus Roadmaps (${allRoadmaps.length}):**\n\n`;
         allRoadmaps.forEach((r, i) => {
           listText += `${i + 1}. ${r.topic}\n`;
@@ -165,7 +154,6 @@ export const handleTelegramWebhook = async (req, res) => {
 
       const newTopic = parts.slice(1).join(' ');
 
-      // Verificar que el usuario esté vinculado
       const userSettings = await userNotificationSettingsService.findByChatId(chatId.toString());
 
       if (!userSettings || !userSettings.userEmail) {
@@ -176,7 +164,6 @@ export const handleTelegramWebhook = async (req, res) => {
         return res.json({ ok: true });
       }
 
-      // Actualizar el roadmap activo en MongoDB
       await userNotificationSettingsService.updateReminderSettings(userSettings.userEmail, {
         activeRoadmapTopic: newTopic
       });
@@ -188,7 +175,6 @@ export const handleTelegramWebhook = async (req, res) => {
     }
     
     else if (text.toLowerCase() === '/listar') {
-      // Listar todos los roadmaps del usuario
       const userSettings = await userNotificationSettingsService.findByChatId(chatId.toString());
 
       if (!userSettings || !userSettings.userEmail) {
@@ -201,7 +187,7 @@ export const handleTelegramWebhook = async (req, res) => {
 
       await telegramService.sendMessage(chatId, '🔍 Buscando roadmaps...');
 
-      const allRoadmaps = await mongoService.getUserRoadmaps(userSettings.userEmail, 20);
+      const allRoadmaps = await learningPathClient.getUserRoadmaps(userSettings.userEmail, 20);
 
       if (allRoadmaps.length === 0) {
         await telegramService.sendMessage(
@@ -229,17 +215,15 @@ export const handleTelegramWebhook = async (req, res) => {
     else {
       await telegramService.sendMessage(chatId, '🤔 Déjame pensar...');
 
-      // Buscar si el usuario está vinculado
       const userSettings = await userNotificationSettingsService.findByChatId(chatId.toString());
 
       let roadmapContext = null;
 
-      // Si está vinculado y tiene roadmap activo, obtener contexto
       if (userSettings && userSettings.userEmail && userSettings.reminderSettings?.activeRoadmapTopic) {
         console.log(`📚 Usuario vinculado: ${userSettings.userEmail}`);
         console.log(`📖 Roadmap activo: ${userSettings.reminderSettings.activeRoadmapTopic}`);
 
-        const roadmapResult = await mongoService.getRoadmapByTopic(
+        const roadmapResult = await learningPathClient.getRoadmapByTopic(
           userSettings.userEmail,
           userSettings.reminderSettings.activeRoadmapTopic
         );
@@ -248,7 +232,7 @@ export const handleTelegramWebhook = async (req, res) => {
           roadmapContext = {
             topic: userSettings.reminderSettings.activeRoadmapTopic,
             roadmap: roadmapResult.roadmap,
-            extraInfo: roadmapResult.extraInfo
+            extraInfo: {}
           };
           console.log('✅ Contexto de roadmap cargado');
         } else {
@@ -258,16 +242,14 @@ export const handleTelegramWebhook = async (req, res) => {
         console.log('ℹ️ Usuario no vinculado o sin roadmap activo');
       }
 
-      // Generar respuesta con IA (con o sin contexto)
       const aiResponse = await groqService.generateResponse(
         text, 
         roadmapContext,
-        true  // MODO ESTRICTO: Solo responde sobre el roadmap
+        true
       );
 
       let finalResponse = aiResponse.response;
 
-      // Si no está vinculado, agregar sugerencia
       if (!userSettings || !userSettings.userEmail) {
         finalResponse += `\n\n💡 Tip: Vincula tu cuenta con /vincular para respuestas personalizadas basadas en tus roadmaps.`;
       }

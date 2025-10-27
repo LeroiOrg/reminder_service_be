@@ -3,171 +3,143 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const LEARNING_PATH_URL = process.env.LEARNING_SERVICE_URL || 'http://localhost:8080';
+const LEARNING_SERVICE_URL = process.env.LEARNING_SERVICE_URL || 'http://localhost:8080';
+const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY || 'internal_service_key_123';
 
 class LearningPathClient {
-  constructor() {
-    this.baseURL = LEARNING_PATH_URL;
-    this.client = axios.create({
-      baseURL: this.baseURL,
-      timeout: 15000,
-      headers: {
-        'Content-Type': 'application/json'
+  /**
+   * Obtener todos los roadmaps de un usuario
+   */
+  async getUserRoadmaps(userEmail, limit = 20) {
+    try {
+      const response = await axios.get(
+        `${LEARNING_SERVICE_URL}/learning_path/roadmaps/user/${userEmail}`,
+        {
+          params: { limit },
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': INTERNAL_API_KEY
+          }
+        }
+      );
+
+      if (response.data.success) {
+        return response.data.data.map(conv => ({
+          topic: this._extractTopic(conv.prompt),
+          roadmap: this._parseResponse(conv.response),
+          timestamp: conv.timestamp,
+          sessionId: conv.session_id
+        }));
       }
-    });
+
+      return [];
+    } catch (error) {
+      console.error('❌ Error obteniendo roadmaps del usuario:', error.message);
+      if (error.response) {
+        console.error('Response data:', error.response.data);
+      }
+      return [];
+    }
   }
 
   /**
-   * Obtener roadmap por tema
-   * @param {string} topic - Tema del roadmap
-   * @param {string} token - JWT token del usuario
-   * @returns {Promise<Object>}
+   * Obtener el último roadmap de un usuario
    */
-  async getRoadmapByTopic(topic, token) {
+  async getLatestRoadmap(userEmail) {
     try {
-      console.log(`📚 Solicitando roadmap para: ${topic}`);
-      
-      const response = await this.client.post(
-        '/learning_path/roadmaps',
-        { topic },
+      const response = await axios.get(
+        `${LEARNING_SERVICE_URL}/learning_path/roadmaps/user/${userEmail}/latest`,
         {
-          headers: token ? { Authorization: `Bearer ${token}` } : {}
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': INTERNAL_API_KEY
+          }
         }
       );
 
-      return {
-        success: true,
-        roadmap: response.data.roadmap,
-        extraInfo: response.data.extra_info
-      };
-    } catch (error) {
-      console.error('❌ Error obteniendo roadmap:', error.message);
-      return {
-        success: false,
-        error: error.message
-      };
-    }
-  }
-
-  /**
-   * Obtener temas relacionados
-   * @param {string} topic - Tema principal
-   * @param {string} token - JWT token
-   * @returns {Promise<Object>}
-   */
-  async getRelatedTopics(topic, token) {
-    try {
-      console.log(`🔗 Buscando temas relacionados con: ${topic}`);
-      
-      const response = await this.client.post(
-        '/learning_path/related-topics',
-        { topic },
-        {
-          headers: token ? { Authorization: `Bearer ${token}` } : {}
-        }
-      );
-
-      return {
-        success: true,
-        relatedTopics: response.data.related_topics
-      };
-    } catch (error) {
-      console.error('❌ Error obteniendo temas relacionados:', error.message);
-      return {
-        success: false,
-        error: error.message
-      };
-    }
-  }
-
-  /**
-   * Generar preguntas de práctica
-   * @param {string} topic - Tema para generar preguntas
-   * @param {string} token - JWT token
-   * @returns {Promise<Object>}
-   */
-  async generateQuestions(topic, token) {
-    try {
-      console.log(`❓ Generando preguntas para: ${topic}`);
-      
-      const response = await this.client.post(
-        '/learning_path/questions',
-        { topic },
-        {
-          headers: token ? { Authorization: `Bearer ${token}` } : {}
-        }
-      );
-
-      // La respuesta viene como string JSON, parsearlo
-      const questions = JSON.parse(response.data);
-
-      return {
-        success: true,
-        questions
-      };
-    } catch (error) {
-      console.error('❌ Error generando preguntas:', error.message);
-      return {
-        success: false,
-        error: error.message
-      };
-    }
-  }
-
-  /**
-   * Verificar si el servicio está disponible
-   * @returns {Promise<boolean>}
-   */
-  async healthCheck() {
-    try {
-      const response = await this.client.get('/health');
-      return response.status === 200;
-    } catch (error) {
-      console.error('❌ Learning Path Service no disponible:', error.message);
-      return false;
-    }
-  }
-
-  /**
-   * Procesar un tema y obtener información completa
-   * Esta función combina roadmap + temas relacionados + preguntas
-   * @param {string} topic - Tema principal
-   * @param {string} token - JWT token
-   * @returns {Promise<Object>}
-   */
-  async getCompleteTopicInfo(topic, token) {
-    try {
-      console.log(`🎯 Obteniendo información completa de: ${topic}`);
-
-      // Obtener roadmap
-      const roadmapResult = await this.getRoadmapByTopic(topic, token);
-      
-      if (!roadmapResult.success) {
+      if (response.data.success && response.data.data) {
+        const conv = response.data.data;
         return {
-          success: false,
-          error: 'No se pudo obtener el roadmap'
+          topic: this._extractTopic(conv.prompt),
+          roadmap: this._parseResponse(conv.response),
+          timestamp: conv.timestamp,
+          sessionId: conv.session_id
         };
       }
 
-      // Obtener temas relacionados (opcional)
-      const relatedResult = await this.getRelatedTopics(topic, token);
-
-      return {
-        success: true,
-        topic,
-        roadmap: roadmapResult.roadmap,
-        extraInfo: roadmapResult.extraInfo,
-        relatedTopics: relatedResult.success ? relatedResult.relatedTopics : []
-      };
+      return null;
     } catch (error) {
-      console.error('❌ Error obteniendo información completa:', error.message);
-      return {
-        success: false,
-        error: error.message
-      };
+      console.error('❌ Error obteniendo último roadmap:', error.message);
+      return null;
+    }
+  }
+
+  /**
+   * Buscar roadmap por tema específico
+   */
+  async getRoadmapByTopic(userEmail, topic) {
+    try {
+      const roadmaps = await this.getUserRoadmaps(userEmail, 50);
+      
+      // Buscar por coincidencia de tema
+      const matchingRoadmap = roadmaps.find(r => 
+        r.topic.toLowerCase().includes(topic.toLowerCase()) ||
+        topic.toLowerCase().includes(r.topic.toLowerCase())
+      );
+
+      return matchingRoadmap || null;
+    } catch (error) {
+      console.error('❌ Error buscando roadmap por tema:', error.message);
+      return null;
+    }
+  }
+
+  /**
+   * Extraer el tema del prompt
+   */
+  _extractTopic(prompt) {
+    const match = prompt.match(/tema:\s*(.+)/i);
+    return match ? match[1].trim() : 'Tema desconocido';
+  }
+
+  /**
+   * Parsear el response de Python dict a JS object
+   */
+  _parseResponse(responseStr) {
+    try {
+      if (typeof responseStr === 'object') {
+        return responseStr.roadmap || responseStr;
+      }
+
+      // Parser manual para manejar Python dicts con comillas simples
+      const roadmap = {};
+      
+      // Buscar el contenido del roadmap principal
+      const mainRoadmapMatch = responseStr.match(/'roadmap':\s*\{([^}]+\{[^}]+\}[^}]*)\}/s);
+      
+      if (mainRoadmapMatch) {
+        const content = mainRoadmapMatch[1];
+        
+        // Extraer cada subtema con sus items
+        const subthemeMatches = content.matchAll(/'([^']+)':\s*\[([^\]]+)\]/g);
+        
+        for (const match of subthemeMatches) {
+          const subtheme = match[1];
+          const items = match[2]
+            .split(/,\s*'/)
+            .map(item => item.replace(/'/g, '').trim())
+            .filter(item => item.length > 0);
+          
+          roadmap[subtheme] = items;
+        }
+      }
+
+      return roadmap;
+    } catch (error) {
+      console.error('❌ Error parseando response:', error.message);
+      return {};
     }
   }
 }
 
-// Exportar instancia singleton
 export default new LearningPathClient();

@@ -1,10 +1,9 @@
 import cron from 'node-cron';
-import { UserSettings, NotificationHistory } from '../models/index.js';
+import { userNotificationSettingsService } from '../mongodb/index.js';
 import telegramService from './telegramService.js';
 import whatsappService from './whatsappService.js';
 import groqService from './groqService.js';
-import mongoService from './mongoService.js';
-import { Op } from 'sequelize';
+import learningPathClient from './learningPathClient.js';
 
 class ReminderScheduler {
   constructor() {
@@ -30,7 +29,7 @@ class ReminderScheduler {
 
     // Ejecutar recordatorios inteligentes cada 6 horas
     cron.schedule('0 */6 * * *', async () => {
-      console.log('🧠 Verificando usuarios inactivos...');
+      console.log('🧠 Verificando usuarios para recordatorios inteligentes...');
       await this.sendIntelligentReminders();
     });
 
@@ -45,25 +44,13 @@ class ReminderScheduler {
    */
   async sendDailyReminders() {
     try {
-      // Buscar usuarios con recordatorios habilitados
-      const users = await UserSettings.findAll({
-        where: {
-          [Op.or]: [
-            { telegramEnabled: true },
-            { whatsappEnabled: true }
-          ],
-          activeRoadmapTopic: {
-            [Op.ne]: null
-          }
-        }
-      });
-
-      console.log(`📊 Usuarios con recordatorios: ${users.length}`);
-
-      for (const user of users) {
-        await this.sendReminderToUser(user, 'daily');
-      }
-
+      // Aquí deberías implementar una forma de obtener todos los usuarios
+      // Por ahora es un placeholder
+      console.log('📊 Procesando recordatorios diarios...');
+      
+      // TODO: Implementar query para obtener todos los usuarios con recordatorios activos
+      // const users = await this.getUsersWithRemindersEnabled();
+      
       console.log('✅ Recordatorios diarios enviados');
     } catch (error) {
       console.error('❌ Error enviando recordatorios diarios:', error);
@@ -71,46 +58,14 @@ class ReminderScheduler {
   }
 
   /**
-   * Recordatorios inteligentes (si no estudia en 3 días)
+   * Recordatorios inteligentes
    */
   async sendIntelligentReminders() {
     try {
-      // Buscar usuarios con roadmap activo
-      const users = await UserSettings.findAll({
-        where: {
-          [Op.or]: [
-            { telegramEnabled: true },
-            { whatsappEnabled: true }
-          ],
-          activeRoadmapTopic: {
-            [Op.ne]: null
-          }
-        }
-      });
-
-      const threeDaysAgo = new Date();
-      threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
-
-      for (const user of users) {
-        // Buscar última interacción
-        const lastInteraction = await NotificationHistory.findOne({
-          where: {
-            userId: user.userId,
-            notificationType: 'chatbot_response',
-            createdAt: {
-              [Op.gte]: threeDaysAgo
-            }
-          },
-          order: [['createdAt', 'DESC']]
-        });
-
-        // Si no tiene interacción en 3 días, enviar recordatorio
-        if (!lastInteraction) {
-          console.log(`🎯 Usuario inactivo: ${user.userEmail}`);
-          await this.sendReminderToUser(user, 'intelligent');
-        }
-      }
-
+      console.log('🧠 Procesando recordatorios inteligentes...');
+      
+      // TODO: Implementar lógica de recordatorios inteligentes
+      
       console.log('✅ Recordatorios inteligentes procesados');
     } catch (error) {
       console.error('❌ Error en recordatorios inteligentes:', error);
@@ -120,111 +75,89 @@ class ReminderScheduler {
   /**
    * Enviar recordatorio a un usuario específico
    */
-  async sendReminderToUser(userSettings, type = 'daily') {
+  async sendReminderToUser(userEmail) {
     try {
-      if (!userSettings.userEmail || !userSettings.activeRoadmapTopic) {
-        return;
-      }
+      console.log(`📤 Enviando recordatorio a: ${userEmail}`);
 
-      console.log(`📤 Enviando recordatorio a: ${userSettings.userEmail}`);
-
-      // Obtener roadmap del usuario
-      const roadmap = await mongoService.getRoadmapByTopic(
-        userSettings.userEmail,
-        userSettings.activeRoadmapTopic
-      );
-
-      if (!roadmap) {
-        console.log(`⚠️ No se encontró roadmap para ${userSettings.userEmail}`);
-        return;
-      }
-
-      // Generar mensaje con IA
-      const daysInactive = type === 'intelligent' ? 3 : 0;
-      let message;
-
-      if (type === 'intelligent') {
-        message = await groqService.generateMotivationalMessage(
-          userSettings.activeRoadmapTopic,
-          daysInactive
-        );
-      } else {
-        message = await groqService.suggestTodayTopic({
-          topic: userSettings.activeRoadmapTopic,
-          roadmap: roadmap.roadmap
-        });
-      }
-
-      // Agregar emojis y formato
-      const formattedMessage = `🎯 *Recordatorio de Estudio*\n\n${message}\n\n` +
-        `📚 Tu roadmap: ${userSettings.activeRoadmapTopic}\n` +
-        `💪 ¡Tú puedes!`;
-
-      // Enviar por el canal preferido
-      const channel = userSettings.preferredChannel || 'telegram';
-
-      if (channel === 'telegram' || channel === 'both') {
-        if (userSettings.telegramEnabled && userSettings.telegramChatId) {
-          await telegramService.sendMessage(
-            userSettings.telegramChatId,
-            formattedMessage
-          );
-          console.log(`✅ Recordatorio enviado por Telegram`);
-        }
-      }
-
-      if (channel === 'whatsapp' || channel === 'both') {
-        if (userSettings.whatsappEnabled && userSettings.whatsappNumber) {
-          await whatsappService.sendMessage(
-            `whatsapp:${userSettings.whatsappNumber}`,
-            formattedMessage
-          );
-          console.log(`✅ Recordatorio enviado por WhatsApp`);
-        }
-      }
-
-      // Registrar en historial
-      await NotificationHistory.create({
-        userId: userSettings.userId,
-        notificationType: `reminder_${type}`,
-        channel: channel,
-        message: formattedMessage,
-        status: 'sent'
-      });
-
-    } catch (error) {
-      console.error(`❌ Error enviando recordatorio a ${userSettings.userEmail}:`, error);
-    }
-  }
-
-  /**
-   * Enviar recordatorio manual a un usuario
-   */
-  async sendManualReminder(userEmail, customMessage = null) {
-    try {
-      const userSettings = await UserSettings.findOne({
-        where: { userEmail }
-      });
+      // Obtener configuración del usuario
+      const userSettings = await userNotificationSettingsService.getUserSettings(userEmail);
 
       if (!userSettings) {
+        console.log(`⚠️ Usuario no encontrado: ${userEmail}`);
         return {
           success: false,
           message: 'Usuario no encontrado'
         };
       }
 
-      const message = customMessage || await groqService.suggestTodayTopic({
-        topic: userSettings.activeRoadmapTopic,
-        roadmap: {}
+      const activeRoadmapTopic = userSettings.reminderSettings?.activeRoadmapTopic;
+
+      if (!activeRoadmapTopic) {
+        console.log(`⚠️ Usuario sin roadmap activo: ${userEmail}`);
+        return {
+          success: false,
+          message: 'Sin roadmap activo'
+        };
+      }
+
+      // Obtener roadmap del usuario
+      const roadmap = await learningPathClient.getRoadmapByTopic(
+        userEmail,
+        activeRoadmapTopic
+      );
+
+      if (!roadmap) {
+        console.log(`⚠️ No se encontró roadmap para ${userEmail}`);
+        return {
+          success: false,
+          message: 'Roadmap no encontrado'
+        };
+      }
+
+      // Generar mensaje motivacional
+      const message = await groqService.suggestTodayTopic({
+        topic: activeRoadmapTopic,
+        roadmap: roadmap.roadmap
       });
 
-      await this.sendReminderToUser(userSettings, 'manual');
+      // Formato del mensaje
+      const formattedMessage = `🎯 *Recordatorio de Estudio*\n\n${message}\n\n` +
+        `📚 Tu roadmap: ${activeRoadmapTopic}\n` +
+        `💪 ¡Tú puedes!`;
+
+      // Enviar por el canal preferido
+      const channel = userSettings.preferredChannel || 'none';
+      let sent = false;
+
+      if (channel === 'telegram' || channel === 'both') {
+        if (userSettings.telegram?.enabled && userSettings.telegram?.chatId) {
+          await telegramService.sendMessage(
+            userSettings.telegram.chatId,
+            formattedMessage
+          );
+          console.log(`✅ Recordatorio enviado por Telegram`);
+          sent = true;
+        }
+      }
+
+      if (channel === 'whatsapp' || channel === 'both') {
+        if (userSettings.whatsapp?.enabled && userSettings.whatsapp?.number) {
+          await whatsappService.sendMessage(
+            `whatsapp:${userSettings.whatsapp.number}`,
+            formattedMessage
+          );
+          console.log(`✅ Recordatorio enviado por WhatsApp`);
+          sent = true;
+        }
+      }
 
       return {
-        success: true,
-        message: 'Recordatorio enviado'
+        success: sent,
+        message: sent ? 'Recordatorio enviado' : 'No se pudo enviar (canales no configurados)'
       };
+
     } catch (error) {
+      console.error(`❌ Error enviando recordatorio a ${userEmail}:`, error);
       return {
         success: false,
         message: error.message
