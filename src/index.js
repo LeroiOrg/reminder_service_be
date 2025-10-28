@@ -1,7 +1,6 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { testConnection, syncDatabase } from './config/database.js';
 import { initializeMongoDB } from './mongodb/index.js';
 import testRoutes from './routes/testRoutes.js';
 import webhookRoutes from './routes/webhookRoutes.js';
@@ -31,14 +30,14 @@ app.get('/', (req, res) => {
   res.json({
     service: 'reminder-service',
     status: 'healthy',
-    version: '3.0.0',
-    tech: 'Node.js + Express',
-    databases: ['PostgreSQL', 'MongoDB (Reminders)', 'MongoDB (Learning Path)'],
+    version: '4.0.0',
+    tech: 'Node.js + Express + MongoDB',
+    databases: ['MongoDB (Reminders)', 'MongoDB (Learning Path via API)'],
     features: [
       'Telegram Bot with Roadmap Integration',
       'WhatsApp Notifications',
       'AI-Powered Chatbot (Groq/Llama)',
-      'Learning Path Integration',
+      'Learning Path Integration via API',
       'User Notification Settings'
     ]
   });
@@ -67,15 +66,7 @@ app.use(errorHandler);
 // Iniciar servidor
 const startServer = async () => {
   try {
-    console.log('🔧 Iniciando Reminder Service...');
-    
-    // Verificar conexión a PostgreSQL
-    console.log('📊 Conectando a PostgreSQL...');
-    await testConnection();
-    
-    // Sincronizar modelos de PostgreSQL
-    console.log('🔄 Sincronizando modelos PostgreSQL...');
-    await syncDatabase();
+    console.log('🔧 Iniciando Reminder Service v4.0...');
     
     // Inicializar MongoDB
     console.log('📊 Inicializando MongoDB...');
@@ -93,9 +84,8 @@ const startServer = async () => {
       console.log(`   - Auth Service: ${process.env.USERS_SERVICE_URL}`);
       console.log(`   - Learning Path: ${process.env.LEARNING_SERVICE_URL}`);
       console.log('\n💾 Bases de datos:');
-      console.log(`   - PostgreSQL: Conectado (Legacy)`);
       console.log(`   - MongoDB Reminders: Conectado`);
-      console.log(`   - MongoDB Learning Path: Conectado`);
+      console.log(`   - Learning Path: Vía API REST`);
       
       // Iniciar sistema de recordatorios
       console.log('\n⏰ Iniciando sistema de recordatorios...');

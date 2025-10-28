@@ -1,7 +1,7 @@
 import whatsappService from '../services/whatsappService.js';
 import groqService from '../services/groqService.js';
-import mongoService from '../services/mongoService.js';
-import { UserSettings, NotificationHistory } from '../models/index.js';
+import learningPathClient from '../services/learningPathClient.js';
+import { userNotificationSettingsService } from '../mongodb/index.js';
 
 /**
  * Manejar webhook de WhatsApp (Twilio)
@@ -48,9 +48,7 @@ export const handleWhatsAppWebhook = async (req, res) => {
         `CAMBIAR [tema] - Cambiar tema\n` +
         `LISTAR - Ver tus roadmaps\n\n` +
         `💬 *Chatear:*\n` +
-        `Escribe tu pregunta y te ayudaré\n\n` +
-        `🎯 *Ejemplo:*\n` +
-        `"¿Qué es un componente en React?"`;
+        `Escribe tu pregunta y te ayudaré`;
 
       await whatsappService.sendMessage(fromNumber, responseText);
     }
@@ -60,7 +58,7 @@ export const handleWhatsAppWebhook = async (req, res) => {
         `Tu código de WhatsApp es:\n` +
         `${cleanNumber}\n\n` +
         `*Pasos:*\n` +
-        `1. Ve a leroi.app/perfil\n` +
+        `1. Ve a leroi.app/profile\n` +
         `2. Ingresa este número en "WhatsApp"\n` +
         `3. Guarda los cambios\n\n` +
         `¡Listo! 🚀`;
@@ -69,10 +67,7 @@ export const handleWhatsAppWebhook = async (req, res) => {
     }
     
     else if (message.toLowerCase() === 'roadmap') {
-      // Buscar usuario vinculado
-      const userSettings = await UserSettings.findOne({
-        where: { whatsappNumber: cleanNumber }
-      });
+      const userSettings = await userNotificationSettingsService.findByWhatsAppNumber(cleanNumber);
 
       if (!userSettings || !userSettings.userEmail) {
         await whatsappService.sendMessage(
@@ -82,7 +77,7 @@ export const handleWhatsAppWebhook = async (req, res) => {
         return res.status(200).send('OK');
       }
 
-      const activeRoadmapTopic = userSettings.activeRoadmapTopic;
+      const activeRoadmapTopic = userSettings.reminderSettings?.activeRoadmapTopic;
 
       if (!activeRoadmapTopic) {
         await whatsappService.sendMessage(
@@ -92,10 +87,9 @@ export const handleWhatsAppWebhook = async (req, res) => {
         return res.status(200).send('OK');
       }
 
-      // Obtener roadmap de MongoDB
       await whatsappService.sendMessage(fromNumber, '📚 Cargando...');
       
-      const roadmapResult = await mongoService.getRoadmapByTopic(
+      const roadmapResult = await learningPathClient.getRoadmapByTopic(
         userSettings.userEmail,
         activeRoadmapTopic
       );
@@ -108,7 +102,6 @@ export const handleWhatsAppWebhook = async (req, res) => {
         return res.status(200).send('OK');
       }
 
-      // Formatear roadmap
       let roadmapText = `📊 *Tu Roadmap: ${activeRoadmapTopic}*\n\n`;
       
       const roadmap = roadmapResult.roadmap;
@@ -124,12 +117,7 @@ export const handleWhatsAppWebhook = async (req, res) => {
 
       roadmapText += `💬 Pregúntame lo que quieras!`;
 
-      await whatsappService.sendMessageWithLink(
-        fromNumber,
-        roadmapText,
-        '🌐 Ver en la web',
-        'https://leroi.app/roadmaps'
-      );
+      await whatsappService.sendMessage(fromNumber, roadmapText);
     }
     
     else if (message.toLowerCase().startsWith('cambiar')) {
@@ -145,9 +133,7 @@ export const handleWhatsAppWebhook = async (req, res) => {
 
       const newTopic = parts.slice(1).join(' ');
 
-      const userSettings = await UserSettings.findOne({
-        where: { whatsappNumber: cleanNumber }
-      });
+      const userSettings = await userNotificationSettingsService.findByWhatsAppNumber(cleanNumber);
 
       if (!userSettings || !userSettings.userEmail) {
         await whatsappService.sendMessage(
@@ -157,8 +143,9 @@ export const handleWhatsAppWebhook = async (req, res) => {
         return res.status(200).send('OK');
       }
 
-      userSettings.activeRoadmapTopic = newTopic;
-      await userSettings.save();
+      await userNotificationSettingsService.updateReminderSettings(userSettings.userEmail, {
+        activeRoadmapTopic: newTopic
+      });
 
       await whatsappService.sendMessage(
         fromNumber,
@@ -167,10 +154,7 @@ export const handleWhatsAppWebhook = async (req, res) => {
     }
     
     else if (message.toLowerCase() === 'listar') {
-      // Listar roadmaps del usuario
-      const userSettings = await UserSettings.findOne({
-        where: { whatsappNumber: cleanNumber }
-      });
+      const userSettings = await userNotificationSettingsService.findByWhatsAppNumber(cleanNumber);
 
       if (!userSettings || !userSettings.userEmail) {
         await whatsappService.sendMessage(
@@ -180,7 +164,7 @@ export const handleWhatsAppWebhook = async (req, res) => {
         return res.status(200).send('OK');
       }
 
-      const roadmaps = await mongoService.getUserRoadmaps(userSettings.userEmail, 10);
+      const roadmaps = await learningPathClient.getUserRoadmaps(userSettings.userEmail, 10);
 
       if (roadmaps.length === 0) {
         await whatsappService.sendMessage(
@@ -205,56 +189,42 @@ export const handleWhatsAppWebhook = async (req, res) => {
     else {
       await whatsappService.sendMessage(fromNumber, '🤔 Déjame pensar...');
 
-      // Buscar usuario vinculado
-      const userSettings = await UserSettings.findOne({
-        where: { whatsappNumber: cleanNumber }
-      });
+      const userSettings = await userNotificationSettingsService.findByWhatsAppNumber(cleanNumber);
 
       let roadmapContext = null;
 
-      // Si está vinculado y tiene roadmap activo
-      if (userSettings && userSettings.userEmail && userSettings.activeRoadmapTopic) {
+      if (userSettings && userSettings.userEmail && userSettings.reminderSettings?.activeRoadmapTopic) {
         console.log(`📚 Usuario: ${userSettings.userEmail}`);
-        console.log(`📖 Roadmap: ${userSettings.activeRoadmapTopic}`);
+        console.log(`📖 Roadmap: ${userSettings.reminderSettings.activeRoadmapTopic}`);
 
-        const roadmapResult = await mongoService.getRoadmapByTopic(
+        const roadmapResult = await learningPathClient.getRoadmapByTopic(
           userSettings.userEmail,
-          userSettings.activeRoadmapTopic
+          userSettings.reminderSettings.activeRoadmapTopic
         );
 
         if (roadmapResult) {
           roadmapContext = {
-            topic: userSettings.activeRoadmapTopic,
+            topic: userSettings.reminderSettings.activeRoadmapTopic,
             roadmap: roadmapResult.roadmap,
-            extraInfo: roadmapResult.extraInfo
+            extraInfo: {}
           };
           console.log('✅ Contexto cargado');
         }
       }
 
-      // Generar respuesta con IA
       const aiResponse = await groqService.generateResponse(
         message, 
         roadmapContext,
-        true  // MODO ESTRICTO
+        true
       );
+      
       let finalResponse = aiResponse.response;
 
-      // Si no vinculado, sugerir
       if (!userSettings || !userSettings.userEmail) {
         finalResponse += `\n\n💡 Tip: Vincula con VINCULAR para respuestas personalizadas`;
       }
 
       await whatsappService.sendMessage(fromNumber, finalResponse);
-
-      // Guardar en historial
-      await NotificationHistory.create({
-        userId: userSettings?.userId || 0,
-        notificationType: 'chatbot_response',
-        channel: 'whatsapp',
-        message: message,
-        status: 'sent'
-      });
     }
 
     res.status(200).send('OK');
