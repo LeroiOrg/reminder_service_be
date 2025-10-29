@@ -6,6 +6,7 @@ import testRoutes from './routes/testRoutes.js';
 import webhookRoutes from './routes/webhookRoutes.js';
 import whatsappWebhookRoutes from './routes/whatsappWebhookRoutes.js';
 import userRoutes from './routes/userRoutes.js';
+import reminderRoutes from './routes/reminderRoutes.js';
 import reminderScheduler from './services/reminderScheduler.js';
 import { notFound, errorHandler } from './middleware/errorHandler.js';
 
@@ -56,6 +57,9 @@ app.use('/webhooks', whatsappWebhookRoutes);
 
 // Rutas de gestión de usuarios
 app.use('/api/users', userRoutes);
+
+// Rutas de recordatorios
+app.use('/api/reminders', reminderRoutes);
 
 // Middleware de 404
 app.use(notFound);

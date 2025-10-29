@@ -8,6 +8,7 @@ import learningPathClient from './learningPathClient.js';
 class ReminderScheduler {
   constructor() {
     this.isRunning = false;
+    this.lastSentMinute = {}; // Para evitar envíos duplicados
   }
 
   /**
@@ -21,10 +22,9 @@ class ReminderScheduler {
 
     console.log('⏰ Iniciando sistema de recordatorios...');
 
-    // Ejecutar cada día a las 9:00 AM
-    cron.schedule('0 9 * * *', async () => {
-      console.log('🔔 Ejecutando recordatorios diarios...');
-      await this.sendDailyReminders();
+    // Verificar cada minuto si algún usuario tiene recordatorio programado
+    cron.schedule('* * * * *', async () => {
+      await this.checkScheduledReminders();
     });
 
     // Ejecutar recordatorios inteligentes cada 6 horas
@@ -35,21 +35,113 @@ class ReminderScheduler {
 
     this.isRunning = true;
     console.log('✅ Sistema de recordatorios activo');
-    console.log('   📅 Recordatorios diarios: 9:00 AM');
+    console.log('   📅 Verificando cada minuto según configuración de usuarios');
     console.log('   🧠 Recordatorios inteligentes: cada 6 horas');
   }
 
   /**
-   * Enviar recordatorios diarios configurados
+   * Verificar si hay usuarios que deben recibir recordatorio en este minuto
+   */
+  async checkScheduledReminders() {
+    try {
+      const now = new Date();
+      const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      const currentMinuteKey = `${now.getDate()}-${currentTime}`;
+
+      // Obtener todos los usuarios con recordatorios activos
+      const users = await userNotificationSettingsService.getAllUsersWithRemindersEnabled();
+
+      if (!users || users.length === 0) {
+        return;
+      }
+
+      for (const user of users) {
+        // Verificar si ya enviamos a este usuario en este minuto
+        if (this.lastSentMinute[user.userEmail] === currentMinuteKey) {
+          continue;
+        }
+
+        const userTime = user.reminderSettings?.time || '09:00';
+        const frequency = user.reminderSettings?.frequency || 'daily';
+
+        // Verificar si es el momento de enviar
+        if (userTime === currentTime && this.shouldSendToday(frequency, user)) {
+          console.log(`🔔 Enviando recordatorio programado a ${user.userEmail} (${currentTime})`);
+          
+          try {
+            await this.sendReminderToUser(user.userEmail);
+            this.lastSentMinute[user.userEmail] = currentMinuteKey;
+          } catch (err) {
+            console.error(`❌ Error enviando a ${user.userEmail}:`, err.message);
+          }
+
+          // Esperar 1 segundo entre envíos
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error en checkScheduledReminders:', error);
+    }
+  }
+
+  /**
+   * Determinar si se debe enviar recordatorio hoy según la frecuencia
+   */
+  shouldSendToday(frequency, user) {
+    const now = new Date();
+    const dayOfWeek = now.getDay(); // 0 = Domingo, 6 = Sábado
+
+    switch (frequency) {
+      case 'daily':
+        return true;
+      
+      case 'every_2_days':
+        // Enviar solo en días pares o impares (simplificado)
+        return now.getDate() % 2 === 0;
+      
+      case 'weekly':
+        // Enviar solo los lunes (día 1)
+        return dayOfWeek === 1;
+      
+      case 'intelligent':
+        // Por ahora funciona como diario, luego se puede mejorar con lógica de progreso
+        return true;
+      
+      case 'disabled':
+        return false;
+      
+      default:
+        return true;
+    }
+  }
+
+  /**
+   * Enviar recordatorios diarios configurados (legacy, ahora usa checkScheduledReminders)
    */
   async sendDailyReminders() {
     try {
-      // Aquí deberías implementar una forma de obtener todos los usuarios
-      // Por ahora es un placeholder
       console.log('📊 Procesando recordatorios diarios...');
       
-      // TODO: Implementar query para obtener todos los usuarios con recordatorios activos
-      // const users = await this.getUsersWithRemindersEnabled();
+      // Obtener todos los usuarios con notificaciones activas
+      const users = await userNotificationSettingsService.getAllUsersWithRemindersEnabled();
+      
+      if (!users || users.length === 0) {
+        console.log('⚠️ No hay usuarios con recordatorios activos');
+        return;
+      }
+
+      console.log(`👥 Enviando recordatorios a ${users.length} usuarios...`);
+
+      // Enviar recordatorio a cada usuario
+      for (const user of users) {
+        try {
+          await this.sendReminderToUser(user.userEmail);
+          // Esperar 1 segundo entre cada envío para no saturar
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        } catch (err) {
+          console.error(`❌ Error enviando a ${user.userEmail}:`, err.message);
+        }
+      }
       
       console.log('✅ Recordatorios diarios enviados');
     } catch (error) {
@@ -64,7 +156,27 @@ class ReminderScheduler {
     try {
       console.log('🧠 Procesando recordatorios inteligentes...');
       
-      // TODO: Implementar lógica de recordatorios inteligentes
+      // Obtener usuarios con frecuencia "intelligent"
+      const allUsers = await userNotificationSettingsService.getAllUsersWithRemindersEnabled();
+      const intelligentUsers = allUsers.filter(
+        user => user.reminderSettings?.frequency === 'intelligent'
+      );
+
+      if (intelligentUsers.length === 0) {
+        console.log('⚠️ No hay usuarios con recordatorios inteligentes');
+        return;
+      }
+
+      console.log(`🤖 Enviando recordatorios inteligentes a ${intelligentUsers.length} usuarios...`);
+
+      for (const user of intelligentUsers) {
+        try {
+          await this.sendReminderToUser(user.userEmail);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        } catch (err) {
+          console.error(`❌ Error enviando a ${user.userEmail}:`, err.message);
+        }
+      }
       
       console.log('✅ Recordatorios inteligentes procesados');
     } catch (error) {

@@ -304,6 +304,34 @@ class UserNotificationSettingsService {
   }
 
   /**
+   * Obtener todos los usuarios con recordatorios activos
+   */
+  async getAllUsersWithRemindersEnabled() {
+    try {
+      const collection = await this.getCollection();
+      
+      // Buscar usuarios donde:
+      // - Tienen al menos un canal activo (Telegram o WhatsApp)
+      // - Tienen un roadmap activo configurado
+      // - La frecuencia de recordatorios no es 'disabled'
+      const users = await collection.find({
+        $or: [
+          { 'telegram.enabled': true },
+          { 'whatsapp.enabled': true }
+        ],
+        'reminderSettings.activeRoadmapTopic': { $ne: null, $exists: true },
+        'reminderSettings.frequency': { $ne: 'disabled' }
+      }).toArray();
+      
+      console.log(`👥 Usuarios con recordatorios activos: ${users.length}`);
+      return users;
+    } catch (error) {
+      console.error(`❌ Error obteniendo usuarios con recordatorios:`, error.message);
+      throw error;
+    }
+  }
+
+  /**
    * Eliminar configuración de usuario
    */
   async deleteUserSettings(userEmail) {
