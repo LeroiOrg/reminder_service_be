@@ -168,22 +168,47 @@ No uses emojis excesivos, máximo 2.
    * @returns {Promise<string>}
    */
   async suggestTodayTopic(roadmapContext) {
-    if (!roadmapContext || !roadmapContext.roadmap) {
-      return 'No tienes un roadmap activo. Usa /roadmap para ver opciones.';
+    try {
+      if (!roadmapContext || !roadmapContext.topic) {
+        return '¡Es un gran día para aprender algo nuevo! 📚';
+      }
+
+      const topic = roadmapContext.topic;
+
+      const prompt = `
+Genera un mensaje motivacional y educativo corto (máximo 4 líneas) para un estudiante que está aprendiendo sobre "${topic}".
+
+El mensaje debe:
+- Ser inspirador y motivante
+- Mencionar algo interesante o útil sobre ${topic}
+- Animar al estudiante a seguir aprendiendo
+- Ser amigable y entusiasta
+- Máximo 2-3 emojis
+
+NO menciones subtemas específicos ni des instrucciones detalladas, solo un mensaje general y motivador.
+      `.trim();
+
+      const completion = await this.groq.chat.completions.create({
+        messages: [
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        model: 'llama-3.3-70b-versatile',
+        temperature: 0.8,
+        max_tokens: 300
+      });
+
+      const response = completion.choices[0]?.message?.content || 
+        `¡Hoy es un gran día para seguir aprendiendo ${topic}! 🚀 Cada paso que das te acerca más a tus objetivos. ¡Vamos, tú puedes! 💪`;
+
+      return response;
+    } catch (error) {
+      console.error('❌ Error generando sugerencia:', error.message);
+      const topic = roadmapContext?.topic || 'tu tema';
+      return `¡Es momento de brillar! 🌟 Hoy es perfecto para avanzar en ${topic}. Recuerda: cada minuto que inviertes en aprender es un paso hacia el éxito. ¡Tú puedes lograrlo! 🚀`;
     }
-
-    // Obtener el primer subtema no completado (simplificado)
-    const subtemas = Object.keys(roadmapContext.roadmap);
-    const primerSubtema = subtemas[0];
-
-    const prompt = `
-Basándote en el roadmap, sugiere qué debería estudiar hoy un estudiante que está aprendiendo ${roadmapContext.topic}.
-El primer subtema es: ${primerSubtema}.
-Da una sugerencia motivadora en 2-3 líneas.
-    `.trim();
-
-    const result = await this.generateResponse(prompt, roadmapContext);
-    return result.response;
   }
 }
 
