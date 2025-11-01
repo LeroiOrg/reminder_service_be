@@ -56,10 +56,10 @@ app.use('/webhooks', webhookRoutes);
 app.use('/webhooks', whatsappWebhookRoutes);
 
 // Rutas de gestión de usuarios
-app.use('/api/users', userRoutes);
+app.use('/reminder-service/api/users', userRoutes);
 
 // Rutas de recordatorios
-app.use('/api/reminders', reminderRoutes);
+app.use('/reminder-service/api/reminders', reminderRoutes);
 
 // Middleware de 404
 app.use(notFound);
@@ -81,7 +81,7 @@ const startServer = async () => {
       console.log('\n✅ Servidor iniciado exitosamente!');
       console.log(`🚀 URL: http://localhost:${PORT}`);
       console.log(`📡 Webhooks: http://localhost:${PORT}/webhooks`);
-      console.log(`👤 User API: http://localhost:${PORT}/api/users`);
+      console.log(`👤 User API: http://localhost:${PORT}/reminder-service/api/users`);
       console.log(`🤖 Telegram Bot: Activo`);
       console.log(`📱 WhatsApp Bot: Activo`);
       console.log('\n📚 Servicios integrados:');
