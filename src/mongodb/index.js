@@ -1,31 +1,34 @@
-import mongoConnection from './connection.js';
+import firestoreConnection from './connection.js';
 import userNotificationSettingsService from './userNotificationSettingsService.js';
 
 /**
- * Inicializar MongoDB y crear índices necesarios
+ * Inicializar Firestore y crear índices necesarios
  */
-export async function initializeMongoDB() {
+export async function initializeFirestore() {
   try {
-    console.log('🔧 Inicializando MongoDB...');
+    console.log('🔧 Inicializando Firestore...');
     
-    // Conectar a MongoDB
-    await mongoConnection.connect();
+    // Conectar a Firestore
+    await firestoreConnection.connect();
     
     // Verificar conexión
-    const isConnected = await mongoConnection.testConnection();
+    const isConnected = await firestoreConnection.testConnection();
     if (!isConnected) {
-      throw new Error('No se pudo conectar a MongoDB');
+      throw new Error('No se pudo conectar a Firestore');
     }
 
-    // Crear índices
-    await userNotificationSettingsService.createIndexes();
+    // Los índices en Firestore se crean automáticamente o se configuran en la consola de GCP
+    // No es necesario crearlos manualmente como en MongoDB
+    console.log('ℹ️  Nota: Los índices en Firestore se gestionan automáticamente');
     
-    console.log('✅ MongoDB inicializado correctamente');
+    console.log('✅ Firestore inicializado correctamente');
     return true;
   } catch (error) {
-    console.error('❌ Error inicializando MongoDB:', error.message);
+    console.error('❌ Error inicializando Firestore:', error.message);
     return false;
   }
 }
 
-export { mongoConnection, userNotificationSettingsService };
+// Mantener compatibilidad con código existente
+export const initializeMongoDB = initializeFirestore;
+export { firestoreConnection as mongoConnection, userNotificationSettingsService };
