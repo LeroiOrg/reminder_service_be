@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { initializeMongoDB } from './mongodb/index.js';
+import { initializeFirestore } from './mongodb/index.js';
 import testRoutes from './routes/testRoutes.js';
 import webhookRoutes from './routes/webhookRoutes.js';
 import whatsappWebhookRoutes from './routes/whatsappWebhookRoutes.js';
@@ -32,8 +32,8 @@ app.get('/', (req, res) => {
     service: 'reminder-service',
     status: 'healthy',
     version: '4.0.0',
-    tech: 'Node.js + Express + MongoDB',
-    databases: ['MongoDB (Reminders)', 'MongoDB (Learning Path via API)'],
+    tech: 'Node.js + Express + Firestore',
+    databases: ['Firestore (Reminders)', 'Firestore (Learning Path via API)'],
     features: [
       'Telegram Bot with Roadmap Integration',
       'WhatsApp Notifications',
@@ -72,9 +72,9 @@ const startServer = async () => {
   try {
     console.log('🔧 Iniciando Reminder Service v4.0...');
     
-    // Inicializar MongoDB
-    console.log('📊 Inicializando MongoDB...');
-    await initializeMongoDB();
+    // Inicializar Firestore
+    console.log('📊 Inicializando Firestore...');
+    await initializeFirestore();
     
     // Iniciar servidor
     app.listen(PORT, () => {
@@ -88,7 +88,7 @@ const startServer = async () => {
       console.log(`   - Auth Service: ${process.env.USERS_SERVICE_URL}`);
       console.log(`   - Learning Path: ${process.env.LEARNING_SERVICE_URL}`);
       console.log('\n💾 Bases de datos:');
-      console.log(`   - MongoDB Reminders: Conectado`);
+      console.log(`   - Firestore Reminders: Conectado`);
       console.log(`   - Learning Path: Vía API REST`);
       
       // Iniciar sistema de recordatorios

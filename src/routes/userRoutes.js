@@ -1,6 +1,6 @@
 import express from 'express';
 import { userNotificationSettingsService } from '../mongodb/index.js';
-import mongoService from '../services/mongoService.js';
+import learningPathClient from '../services/learningPathClient.js';
 
 const router = express.Router();
 
@@ -21,7 +21,7 @@ router.post('/link-telegram', async (req, res) => {
 
     console.log(`🔗 Vinculando: ${email} → Telegram: ${telegramChatId}`);
 
-    // Vincular Telegram en MongoDB
+    // Vincular Telegram en Firestore
     await userNotificationSettingsService.linkTelegram(email, telegramChatId);
 
     // Si hay un roadmap activo, actualizarlo
@@ -71,7 +71,7 @@ router.post('/link-whatsapp', async (req, res) => {
 
     console.log(`🔗 Vinculando: ${email} → WhatsApp: ${whatsappNumber}`);
 
-    // Vincular WhatsApp en MongoDB
+    // Vincular WhatsApp en Firestore
     await userNotificationSettingsService.linkWhatsApp(email, whatsappNumber);
 
     // Si hay un roadmap activo, actualizarlo
@@ -106,7 +106,7 @@ router.post('/link-whatsapp', async (req, res) => {
 
 /**
  * GET /api/users/settings/:email
- * Obtener configuración de un usuario
+ * Obtener configuración de un usuario (ahora desde Firestore)
  */
 router.get('/settings/:email', async (req, res) => {
   try {
@@ -414,8 +414,8 @@ router.put('/active-roadmap/:email', async (req, res) => {
 
     console.log(`🎯 Activando roadmap "${roadmapTopic}" para ${email}`);
 
-    // Verificar que el roadmap existe en learning_path
-    const roadmapExists = await mongoService.getRoadmapByTopic(email, roadmapTopic);
+    // Verificar que el roadmap existe en learning_path (vía API)
+    const roadmapExists = await learningPathClient.getRoadmapByTopic(email, roadmapTopic);
 
     if (!roadmapExists) {
       return res.status(404).json({
@@ -424,7 +424,7 @@ router.put('/active-roadmap/:email', async (req, res) => {
       });
     }
 
-    // Actualizar el roadmap activo en MongoDB
+    // Actualizar el roadmap activo en Firestore
     await userNotificationSettingsService.updateReminderSettings(email, {
       activeRoadmapTopic: roadmapTopic
     });
@@ -451,7 +451,7 @@ router.put('/active-roadmap/:email', async (req, res) => {
 
 /**
  * GET /api/users/roadmaps/:email
- * Obtener todos los roadmaps de un usuario desde MongoDB (Learning Path)
+ * Obtener todos los roadmaps de un usuario (vía Learning Path API)
  */
 router.get('/roadmaps/:email', async (req, res) => {
   try {
@@ -459,7 +459,7 @@ router.get('/roadmaps/:email', async (req, res) => {
 
     console.log(`📚 Obteniendo roadmaps de: ${email}`);
 
-    const roadmaps = await mongoService.getUserRoadmaps(email, 50);
+    const roadmaps = await learningPathClient.getUserRoadmaps(email, 50);
 
     if (roadmaps.length === 0) {
       return res.json({
@@ -474,7 +474,7 @@ router.get('/roadmaps/:email', async (req, res) => {
       topic: r.topic,
       subtopicsCount: Object.keys(r.roadmap || {}).length,
       timestamp: r.timestamp,
-      createdAt: new Date(r.timestamp).toISOString()
+      createdAt: r.timestamp ? new Date(r.timestamp).toISOString() : null
     }));
 
     res.json({
