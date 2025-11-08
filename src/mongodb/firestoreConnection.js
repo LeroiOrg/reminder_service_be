@@ -4,17 +4,12 @@
  */
 import { Firestore } from '@google-cloud/firestore';
 import dotenv from 'dotenv';
-import { fileURLToPath } from 'url';
-import { dirname, resolve } from 'path';
 
 dotenv.config();
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
 // Variables de configuración
 const PROJECT_ID = process.env.GCP_PROJECT_ID || 'leroi-474015';
-const CREDENTIALS_PATH = process.env.GOOGLE_APPLICATION_CREDENTIALS || './keys/service-account.json';
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
 /**
  * Clase para manejar la conexión a Firestore
@@ -37,14 +32,23 @@ class FirestoreConnection {
 
       console.log('🔌 Conectando a Firestore (Reminder Service)...');
 
-      // Crear cliente de Firestore
-      this.db = new Firestore({
+      // En producción (Cloud Run), usar Application Default Credentials
+      // En desarrollo, usar archivo JSON si existe
+      const config = {
         projectId: PROJECT_ID,
-        keyFilename: resolve(CREDENTIALS_PATH),
-      });
+      };
+
+      // Solo agregar keyFilename si estamos en desarrollo y existe la variable
+      if (!IS_PRODUCTION && process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+        config.keyFilename = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+      }
+
+      // Crear cliente de Firestore
+      this.db = new Firestore(config);
 
       this.isConnected = true;
       console.log(`✅ Conectado a Firestore - Proyecto: ${PROJECT_ID}`);
+      console.log(`   Modo: ${IS_PRODUCTION ? 'Production (ADC)' : 'Development'}`);
 
       return this.db;
     } catch (error) {
